@@ -219,16 +219,25 @@ void SExpressionParser::skipWhitespace() {
 
 Element* SExpressionParser::parseString() {
   bool dollared = false;
+  bool quoted = false;
   if (input[0] == '$') {
     input++;
     dollared = true;
   }
   char *start = input;
   if (input[0] == '"') {
+    quoted = true;
     // parse escaping \", but leave code escaped - we'll handle escaping in memory segments specifically
     input++;
     std::string str;
+
     while (1) {
+      if (input[0] == '$') {
+        dollared = true;
+        quoted = false;
+        input++;
+        continue;
+      }
       if (input[0] == 0) throw ParseException("unterminated string", line, start - lineStart);
       if (input[0] == '"') break;
       if (input[0] == '\\') {
@@ -242,7 +251,7 @@ Element* SExpressionParser::parseString() {
       input++;
     }
     input++;
-    return allocator.alloc<Element>()->setString(IString(str.c_str(), false), dollared, true)->setMetadata(line, start - lineStart, loc);
+    return allocator.alloc<Element>()->setString(IString(str.c_str(), false), dollared, quoted)->setMetadata(line, start - lineStart, loc);
   }
   while (input[0] && !isspace(input[0]) && input[0] != ')' && input[0] != '(' && input[0] != ';') input++;
   if (start == input) throw ParseException("expected string", line, input - lineStart);
@@ -661,6 +670,7 @@ Expression* SExpressionWasmBuilder::makeExpression(Element& s) {
   IString id = s[0]->str();
   const char *str = id.str;
   const char *dot = strchr(str, '.');
+
   if (dot) {
     // type.operation (e.g. i32.add)
     Type type = stringToType(str, false, true);
